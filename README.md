@@ -14,26 +14,29 @@ pip install customtkinter ytmusicapi pandas
 Run the application:
 python app.py
 
+⚡ Tip: One-Click Launcher (Windows)
+I have included a file named Run_Sync_Hub.bat in this repository for your convenience.
+
+Once you have installed the dependencies (Step 3 above), you can simply double-click Run_Sync_Hub.bat to launch the app instantly without opening a terminal!
+
 🔑 Detailed Guide: How to Get Your Authentication Headers
 The bot needs a "VIP Pass" to add songs to your account. Follow these exact steps to get it:
 
-Open Google Chrome or Microsoft Edge on your computer.
-
-Go to music.youtube.com and make sure you are logged in to your account.
+Open Google Chrome or Microsoft Edge and go to music.youtube.com (ensure you are logged in).
 
 Press F12 on your keyboard (or right-click anywhere and select Inspect).
 
-Look at the top of the panel that opens and click the Network tab.
+Click the Network tab at the top of the panel.
 
 In the small "Filter" search box, type the word: browse
 
-Press F5 on your keyboard to refresh the page.
+Press F5 to refresh the page.
 
-You will see an item named browse appear in the list. Click it once.
+Click the first browse item that appears in the list.
 
-A new section will open on the right. Look for a sub-heading called Request Headers.
+Look for a sub-heading called Request Headers.
 
-Highlight and copy EVERYTHING inside the Request Headers section (from the very top word "accept:" all the way down to the end of your long "cookie:" strings).
+Highlight and copy EVERYTHING inside the Request Headers section (from "accept:" down to the end of your long "cookie:" strings).
 
 Open the Sync Hub app, go to the Authentication tab, paste that text, and click Convert.
 
@@ -42,28 +45,14 @@ This project is open-source. You are free to adjust, improve, or fix the code fo
 
 For Personal Use: You can edit your local app.py file directly after downloading.
 
-To Suggest Improvements: Please Fork this repository, make your changes, and submit a Pull Request. I welcome community improvements to the matching engine and UI!
+To Suggest Improvements: Please Fork this repository, make your changes, and submit a Pull Request.
 
 Permissions: No one can edit the main files in this repository without my explicit approval. Your contributions will be reviewed before being merged.
 
 📖 User Manual & Troubleshooting
 1. What do these buttons do?
-Dashboard: This is the main control room. Here you tell the bot where to put the songs, choose your strictness mode, and click "INITIATE SYNC ENGINE" to start adding songs. You can also click "SCAN PLAYLIST TARGET BOT" to autonomously download your live YouTube playlist and check it for missing or duplicate songs.
+Dashboard: The main control room. Here you tell the bot where to put the songs, choose your mode, and click "INITIATE SYNC ENGINE". You can also click "SCAN PLAYLIST TARGET BOT" to check your live playlist for gaps.
 
-Data Import: This is where you upload your raw playlist file (CSV format) exported from Spotify/Apple. The application will clean it up and prepare it for the bot to read.
+Data Import: Upload your raw CSV file (Spotify/Apple export). The app will format it for the bot.
 
-Authentication: This is where you give the bot the "VIP Pass" (F12 Headers) so it can securely log into your YouTube account.
-
-2. Strict Mode vs Relaxed Mode
-STRICT MODE (For Perfectionists): The bot verifies every song mathematically. If it is not 100 percent sure, it stops and alerts you. It also checks the YouTube server periodically to ensure perfect 1-to-1 order.
-
-RELAXED MODE (For Casual Users): The bot will find the closest match it can and add it silently. It disables deep safety checks and will not stop if YouTube lags.
-
-3. Error Glossary & Fixes
-"Ghost Add" Error: YouTube servers lagged. The bot told YouTube to add a song, but YouTube did not save it. Run the Target Scanner to find the gap.
-
-"Authentication Error 401": Your browser session expired. Grab fresh F12 Request Headers from your browser, paste them in the Auth tab, and click convert.
-
-"Not Found Error 404": The playlist URL is wrong, or the playlist was deleted. Check the URL or create a new one.
-
-"Duplicate Error 409": You tried to add the exact same song twice. Check your YouTube playlist and delete duplicates manually.
+Authentication: Converts your browser headers into a secure login token.
