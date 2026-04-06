@@ -103,7 +103,7 @@ class UltimateSyncApp(ctk.CTk):
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
 
-        # PART 3A: SIDEBAR NAVIGATION
+        # SIDEBAR
         self.sidebar_frame = ctk.CTkFrame(self, width=220, corner_radius=0)
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
         self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="Sync Hub", font=ctk.CTkFont(size=22, weight="bold"))
@@ -114,7 +114,7 @@ class UltimateSyncApp(ctk.CTk):
         self.add_nav_btn("3. Authentication", "Add F12 Browser Headers", 5, "auth")
         self.add_nav_btn("? Help & Guides", "Fix errors & manuals", 7, "guide", color="#52796F")
 
-        # PART 3B: DASHBOARD VIEW
+        # DASHBOARD
         self.frame_dash = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
         self.frame_dash.grid_columnconfigure(0, weight=1)
         self.frame_dash.grid_columnconfigure(1, weight=1)
@@ -144,15 +144,15 @@ class UltimateSyncApp(ctk.CTk):
         self.console.configure(state="disabled")
         sys.stdout = TextRedirector(self.console)
 
-        # PART 3C: DATA IMPORT VIEW
+        # IMPORT VIEW
         self.frame_import = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
         self.frame_import.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(self.frame_import, text="Import External Playlist", font=ctk.CTkFont(size=24, weight="bold")).grid(row=0, column=0, padx=20, pady=40, sticky="w")
-        ctk.CTkLabel(self.frame_import, text="This tool automatically fixes typos like 'Tittle' or 'Artis' and maps 'Track Name' headers.", justify="left").grid(row=1, column=0, padx=20, pady=5, sticky="w")
+        ctk.CTkLabel(self.frame_import, text="Automatically identifies names and removes technical links (URL/URI).", justify="left").grid(row=1, column=0, padx=20, pady=5, sticky="w")
         self.btn_import_file = ctk.CTkButton(self.frame_import, text="SELECT FILE & CONVERT", command=self.import_csv_logic, height=40, fg_color="#81B29A")
         self.btn_import_file.grid(row=2, column=0, padx=20, pady=20, sticky="w")
 
-        # PART 3D: AUTHENTICATION VIEW
+        # AUTH VIEW
         self.frame_auth = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
         self.frame_auth.grid_columnconfigure(0, weight=1)
         self.frame_auth.grid_rowconfigure(2, weight=1)
@@ -162,7 +162,7 @@ class UltimateSyncApp(ctk.CTk):
         self.btn_save_auth = ctk.CTkButton(self.frame_auth, text="CONVERT BROWSER FILE", command=self.save_headers, height=40, fg_color="#E07A5F")
         self.btn_save_auth.grid(row=2, column=0, padx=20, pady=20, sticky="w")
 
-        # PART 3E: HELP & GUIDES
+        # GUIDE VIEW
         self.frame_guide = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
         self.frame_guide.grid_columnconfigure(0, weight=1)
         self.frame_guide.grid_rowconfigure(1, weight=1)
@@ -186,49 +186,61 @@ class UltimateSyncApp(ctk.CTk):
             if k == name: f.grid(row=0, column=1, sticky="nsew")
             else: f.grid_forget()
 
-    # PART 4: FUZZY IMPORT LOGIC [ADJUSTABLE]
+    # PART 4: SMART SCORING IMPORT LOGIC [ADJUSTABLE]
     def import_csv_logic(self):
         file_path = ctk.filedialog.askopenfilename(title="Select Playlist File", filetypes=[("CSV files", "*.csv")])
         if not file_path: return
         try:
-            # Load with latin1 to safely handle all symbols
-            df = pd.read_csv(file_path, encoding='latin1')
+            df = None
+            for enc in ['utf-8-sig', 'latin1', 'cp1252']:
+                try:
+                    df = pd.read_csv(file_path, encoding=enc)
+                    break
+                except: continue
             
-            # Keywords to find Title and Artist even with typos
-            title_keywords = ["title", "tittle", "song", "track", "name"]
-            artist_keywords = ["artist", "artis", "singer", "performer", "band"]
-            
-            found_title_col = None
-            found_artist_col = None
+            if df is None: raise Exception("File encoding unknown.")
+
+            def get_score(col_name, target):
+                c = str(col_name).lower().strip()
+                score = 0
+                if any(x in c for x in ['url', 'uri', 'link', 'id', 'path', 'image']): score -= 1000
+                if target == 'title':
+                    if c in ['title', 'tittle']: score += 100
+                    elif c in ['track name', 'song name']: score += 95
+                    elif c == 'name': score += 90
+                    elif 'title' in c: score += 80
+                    elif 'track' in c: score += 70
+                    elif 'song' in c: score += 60
+                    elif 'name' in c: score += 50
+                elif target == 'artist':
+                    if c in ['artist', 'artis']: score += 100
+                    elif c in ['artist name', 'artist name(s)']: score += 95
+                    elif 'artist' in c: score += 80
+                    elif 'singer' in c or 'band' in c: score += 50
+                return score
+
+            best_t_col, best_t_score = None, -999
+            best_a_col, best_a_score = None, -999
 
             for col in df.columns:
-                c_clean = col.lower().strip()
-                # Check for Title matches
-                if any(k in c_clean for k in title_keywords):
-                    # Prioritize exact word if multiple matches exist
-                    found_title_col = col
-                # Check for Artist matches
-                if any(k in c_clean for k in artist_keywords):
-                    found_artist_col = col
-            
-            if found_title_col and found_artist_col:
-                df = df.rename(columns={found_title_col: 'Title', found_artist_col: 'Artist'})
+                t_score, a_score = get_score(col, 'title'), get_score(col, 'artist')
+                if t_score > best_t_score: best_t_score, best_t_col = t_score, col
+                if a_score > best_a_score: best_a_score, best_a_col = a_score, col
+
+            if best_t_score > 0 and best_a_score > 0:
+                df = df.rename(columns={best_t_col: 'Title', best_a_col: 'Artist'})
+                if 'No' not in df.columns: df.insert(0, 'No', range(1, len(df) + 1))
+                df['Title'] = df['Title'].fillna("Unknown").astype(str)
+                df['Artist'] = df['Artist'].fillna("Unknown").astype(str)
                 
-                # Create 'No' column based on position
-                if 'No' not in df.columns:
-                    df.insert(0, 'No', range(1, len(df) + 1))
-                
-                # Standardize and save
                 final_df = df[['No', 'Title', 'Artist']].copy()
                 final_df.to_csv("cleanlist.csv", index=False, encoding='utf-8-sig')
                 
                 self.select_frame("dash")
-                print("\n--- IMPORT SUCCESS ---")
-                print(f"Standardized: '{found_title_col}' -> Title | '{found_artist_col}' -> Artist")
-                alert_user("Success", "List imported and auto-corrected successfully.")
-            else:
-                alert_user("Format Error", "Could not identify song/artist columns.\nEnsure your CSV headers are clear.")
-        except Exception as e: alert_user("Import Error", f"Failed to process file: {str(e)}")
+                print(f"\n--- IMPORT SUCCESS ---\nFound: Title -> '{best_t_col}' | Artist -> '{best_a_col}'")
+                alert_user("Success", "List imported and corrected successfully.")
+            else: alert_user("Format Error", "Could not identify song/artist columns.")
+        except Exception as e: alert_user("Import Error", str(e))
 
     def save_headers(self):
         raw = self.header_input.get("1.0", "end-1c").strip()
@@ -254,28 +266,18 @@ class UltimateSyncApp(ctk.CTk):
 
     def run_target_logic(self):
         brain = SmartBrain()
-        print("\n--- SCANNER BOOTING ---")
         try:
             if not os.path.exists("browser.json") or not os.path.exists("cleanlist.csv"):
-                print("!!! ERROR: Missing required files !!!")
-                self.unlock_buttons(); return
+                print("!!! ERROR: Missing files !!!"); self.unlock_buttons(); return
             yt = YTMusic("browser.json")
             p_req = self.playlist_input.get().strip() or "OST All Songs"
             PLAYLIST_ID = None
-            if "list=" in p_req:
-                try: PLAYLIST_ID = p_req.split("list=")[1].split("&")[0]
-                except: pass
-            else:
-                for p in yt.get_library_playlists(limit=100):
-                    if p['title'].lower() == p_req.lower():
-                        PLAYLIST_ID = p['playlistId']
-                        break
-            if not PLAYLIST_ID:
-                print(f"!!! ERROR: '{p_req}' not found !!!"); self.unlock_buttons(); return
+            for p in yt.get_library_playlists(limit=100):
+                if p['title'].lower() == p_req.lower(): PLAYLIST_ID = p['playlistId']; break
+            if not PLAYLIST_ID: print(f"!!! ERROR: '{p_req}' not found !!!"); self.unlock_buttons(); return
             
             tracks = yt.get_playlist(PLAYLIST_ID, limit=None).get('tracks', [])
             yt_tracks = [{"Title": t['title'], "Artist": ", ".join([a['name'] for a in t['artists']])} for t in tracks]
-            
             df_m = pd.read_csv("cleanlist.csv", encoding='utf-8-sig')
             missing, offset = [], 0
             for idx, row in df_m.iterrows():
@@ -284,9 +286,7 @@ class UltimateSyncApp(ctk.CTk):
                     if brain.is_same_song(m_no, row['Title'], row['Artist'], yt_tracks[e_idx]['Title'], yt_tracks[e_idx]['Artist']): continue
                 missing.append(f"GAP #{m_no}: {row['Artist']} - {row['Title']}")
             
-            if missing: 
-                print(f"\n[!] GAPS DETECTED ({len(missing)}):")
-                for m in missing: print(m)
+            if missing: print(f"\n[!] GAPS FOUND ({len(missing)}):"); [print(m) for m in missing]
             else: print("\n[+] 100% PERFECT SYNC.")
             self.unlock_buttons()
         except Exception as e: print(f"\n!!! SCAN ERROR: {str(e)} !!!"); self.unlock_buttons()
@@ -297,8 +297,7 @@ class UltimateSyncApp(ctk.CTk):
 
     def run_sync_logic(self):
         try:
-            if not os.path.exists("browser.json") or not os.path.exists("cleanlist.csv"): 
-                self.unlock_buttons(); return
+            if not os.path.exists("browser.json") or not os.path.exists("cleanlist.csv"): self.unlock_buttons(); return
             yt = YTMusic("browser.json")
             brain, cache = SmartBrain(), load_cache_with_overrides()
             is_strict = "Strict" in self.mode_switch.get()
@@ -307,24 +306,20 @@ class UltimateSyncApp(ctk.CTk):
             PLAYLIST_ID = None
             for p in yt.get_library_playlists(limit=100):
                 if p['title'].lower() == p_req.lower(): PLAYLIST_ID = p['playlistId']; break
-            if not PLAYLIST_ID: 
-                PLAYLIST_ID = yt.create_playlist(p_req, "Sync Hub Auto"); time.sleep(3)
+            if not PLAYLIST_ID: PLAYLIST_ID = yt.create_playlist(p_req, "Sync Hub Auto"); time.sleep(3)
             
             live_count = len(yt.get_playlist(PLAYLIST_ID, limit=None).get('tracks', []))
             df = pd.read_csv("cleanlist.csv", encoding='utf-8-sig')
             total = len(df)
             
-            print(f"--- STARTING SYNC ({'STRICT' if is_strict else 'RELAXED'}) ---")
             for i in range(total):
                 m_no, m_title, m_artist = int(df.iloc[i]['No']), str(df.iloc[i]['Title']), str(df.iloc[i]['Artist'])
                 if m_no <= live_count: print(f"[{m_no}/{total}] SKIPPED"); continue
-                
                 vid = cache.get(m_no)
                 if not vid:
                     s = yt.search(f"{m_artist} {m_title}", filter="songs")
                     if not s: continue
                     vid = s[0]['videoId']
-                
                 yt.add_playlist_items(PLAYLIST_ID, [vid])
                 with open("url.txt", "a") as f: f.write(f'{m_no},"{vid}"\n')
                 time.sleep(3.5); print(f"[{m_no}/{total}] ADDED")
