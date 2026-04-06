@@ -1,6 +1,3 @@
-YT Music Sync Hub
-An autonomous Python desktop application to synchronize local CSV playlists to YouTube Music. This tool allows you to import external playlists, convert browser authentication headers, and accurately scan or sync tracks to your live YouTube Music account using a customizable AI-matching engine.
-
 🚀 Installation & Setup
 To run this application locally, you will need Python installed on your machine.
 
