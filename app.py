@@ -96,7 +96,7 @@ def load_cache_with_overrides():
 class UltimateSyncApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("YT Music Control Center")
+        self.title("YT Music Sync Hub")
         self.geometry("950x650")
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
@@ -109,7 +109,6 @@ class UltimateSyncApp(ctk.CTk):
         self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="Sync Hub", font=ctk.CTkFont(size=22, weight="bold"))
         self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 30))
 
-        # Sidebar Buttons
         self.add_nav_btn("1. Dashboard", "Run scanners & sync", 1, "dash")
         self.add_nav_btn("2. Data Import", "Convert CSV to clean list", 3, "import")
         self.add_nav_btn("3. Authentication", "Add F12 Browser Headers", 5, "auth")
@@ -132,7 +131,6 @@ class UltimateSyncApp(ctk.CTk):
         self.mode_switch = ctk.CTkOptionMenu(self.dash_controls, values=["Strict Mode (Perfectionist)", "Relaxed Mode (Just add them)"])
         self.mode_switch.grid(row=1, column=1, padx=10, pady=10, sticky="w")
 
-        # Dashboard Buttons with Sub-labels
         self.btn_scan = ctk.CTkButton(self.frame_dash, text="SCAN PLAYLIST TARGET BOT", command=self.start_scan_thread, height=40, fg_color="#E07A5F", hover_color="#D06A4F")
         self.btn_scan.grid(row=1, column=0, padx=20, pady=(10,0), sticky="ew")
         ctk.CTkLabel(self.frame_dash, text="Checks YouTube vs Local List for gaps", font=ctk.CTkFont(size=11), text_color="gray").grid(row=2, column=0, pady=(0,10))
@@ -150,8 +148,9 @@ class UltimateSyncApp(ctk.CTk):
         self.frame_import = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
         self.frame_import.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(self.frame_import, text="Import External Playlist", font=ctk.CTkFont(size=24, weight="bold")).grid(row=0, column=0, padx=20, pady=40, sticky="w")
+        ctk.CTkLabel(self.frame_import, text="This tool automatically fixes typos like 'Tittle' or 'Artis' and maps 'Track Name' headers.", justify="left").grid(row=1, column=0, padx=20, pady=5, sticky="w")
         self.btn_import_file = ctk.CTkButton(self.frame_import, text="SELECT FILE & CONVERT", command=self.import_csv_logic, height=40, fg_color="#81B29A")
-        self.btn_import_file.grid(row=1, column=0, padx=20, pady=20, sticky="w")
+        self.btn_import_file.grid(row=2, column=0, padx=20, pady=20, sticky="w")
 
         # PART 3D: AUTHENTICATION VIEW
         self.frame_auth = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
@@ -187,31 +186,49 @@ class UltimateSyncApp(ctk.CTk):
             if k == name: f.grid(row=0, column=1, sticky="nsew")
             else: f.grid_forget()
 
-    # PART 4: IMPROVED IMPORT LOGIC [CORE]
+    # PART 4: FUZZY IMPORT LOGIC [ADJUSTABLE]
     def import_csv_logic(self):
         file_path = ctk.filedialog.askopenfilename(title="Select Playlist File", filetypes=[("CSV files", "*.csv")])
         if not file_path: return
         try:
+            # Load with latin1 to safely handle all symbols
             df = pd.read_csv(file_path, encoding='latin1')
-            column_map = {
-                'title': ['title', 'song', 'track', 'name', 'song name'],
-                'artist': ['artist', 'singer', 'performer', 'band', 'artist name']
-            }
-            f_title, f_artist = None, None
-            for standard, aliases in column_map.items():
-                for col in df.columns:
-                    if col.lower().strip() in aliases:
-                        if standard == 'title': f_title = col
-                        if standard == 'artist': f_artist = col
-            if f_title and f_artist:
-                df = df.rename(columns={f_title: 'Title', f_artist: 'Artist'})
-                if 'No' not in df.columns: df.insert(0, 'No', range(1, len(df) + 1))
-                df[['No', 'Title', 'Artist']].to_csv("cleanlist.csv", index=False)
+            
+            # Keywords to find Title and Artist even with typos
+            title_keywords = ["title", "tittle", "song", "track", "name"]
+            artist_keywords = ["artist", "artis", "singer", "performer", "band"]
+            
+            found_title_col = None
+            found_artist_col = None
+
+            for col in df.columns:
+                c_clean = col.lower().strip()
+                # Check for Title matches
+                if any(k in c_clean for k in title_keywords):
+                    # Prioritize exact word if multiple matches exist
+                    found_title_col = col
+                # Check for Artist matches
+                if any(k in c_clean for k in artist_keywords):
+                    found_artist_col = col
+            
+            if found_title_col and found_artist_col:
+                df = df.rename(columns={found_title_col: 'Title', found_artist_col: 'Artist'})
+                
+                # Create 'No' column based on position
+                if 'No' not in df.columns:
+                    df.insert(0, 'No', range(1, len(df) + 1))
+                
+                # Standardize and save
+                final_df = df[['No', 'Title', 'Artist']].copy()
+                final_df.to_csv("cleanlist.csv", index=False, encoding='utf-8-sig')
+                
                 self.select_frame("dash")
-                alert_user("Success", f"Imported '{f_title}' and '{f_artist}' successfully.")
+                print("\n--- IMPORT SUCCESS ---")
+                print(f"Standardized: '{found_title_col}' -> Title | '{found_artist_col}' -> Artist")
+                alert_user("Success", "List imported and auto-corrected successfully.")
             else:
-                alert_user("Format Error", "CSV must contain 'Title' and 'Artist' (or similar) columns.")
-        except Exception as e: alert_user("Import Error", str(e))
+                alert_user("Format Error", "Could not identify song/artist columns.\nEnsure your CSV headers are clear.")
+        except Exception as e: alert_user("Import Error", f"Failed to process file: {str(e)}")
 
     def save_headers(self):
         raw = self.header_input.get("1.0", "end-1c").strip()
@@ -237,6 +254,7 @@ class UltimateSyncApp(ctk.CTk):
 
     def run_target_logic(self):
         brain = SmartBrain()
+        print("\n--- SCANNER BOOTING ---")
         try:
             if not os.path.exists("browser.json") or not os.path.exists("cleanlist.csv"):
                 print("!!! ERROR: Missing required files !!!")
@@ -249,20 +267,25 @@ class UltimateSyncApp(ctk.CTk):
                 except: pass
             else:
                 for p in yt.get_library_playlists(limit=100):
-                    if p['title'].lower() == p_req.lower(): PLAYLIST_ID = p['playlistId']; break
-            if not PLAYLIST_ID: print(f"!!! ERROR: '{p_req}' not found !!!"); self.unlock_buttons(); return
+                    if p['title'].lower() == p_req.lower():
+                        PLAYLIST_ID = p['playlistId']
+                        break
+            if not PLAYLIST_ID:
+                print(f"!!! ERROR: '{p_req}' not found !!!"); self.unlock_buttons(); return
+            
             tracks = yt.get_playlist(PLAYLIST_ID, limit=None).get('tracks', [])
             yt_tracks = [{"Title": t['title'], "Artist": ", ".join([a['name'] for a in t['artists']])} for t in tracks]
-            df_m = pd.read_csv("cleanlist.csv")
-            df_m.columns = ['No', 'Title', 'Artist']
+            
+            df_m = pd.read_csv("cleanlist.csv", encoding='utf-8-sig')
             missing, offset = [], 0
             for idx, row in df_m.iterrows():
                 m_no, e_idx = int(row['No']), idx + offset
                 if e_idx < len(yt_tracks):
                     if brain.is_same_song(m_no, row['Title'], row['Artist'], yt_tracks[e_idx]['Title'], yt_tracks[e_idx]['Artist']): continue
                 missing.append(f"GAP #{m_no}: {row['Artist']} - {row['Title']}")
+            
             if missing: 
-                print("\n[!] GAPS DETECTED:")
+                print(f"\n[!] GAPS DETECTED ({len(missing)}):")
                 for m in missing: print(m)
             else: print("\n[+] 100% PERFECT SYNC.")
             self.unlock_buttons()
@@ -274,29 +297,37 @@ class UltimateSyncApp(ctk.CTk):
 
     def run_sync_logic(self):
         try:
-            if not os.path.exists("browser.json"): self.unlock_buttons(); return
+            if not os.path.exists("browser.json") or not os.path.exists("cleanlist.csv"): 
+                self.unlock_buttons(); return
             yt = YTMusic("browser.json")
             brain, cache = SmartBrain(), load_cache_with_overrides()
             is_strict = "Strict" in self.mode_switch.get()
             p_req = self.playlist_input.get().strip() or "OST All Songs"
+            
             PLAYLIST_ID = None
             for p in yt.get_library_playlists(limit=100):
                 if p['title'].lower() == p_req.lower(): PLAYLIST_ID = p['playlistId']; break
-            if not PLAYLIST_ID: PLAYLIST_ID = yt.create_playlist(p_req, "Sync Hub"); time.sleep(3)
+            if not PLAYLIST_ID: 
+                PLAYLIST_ID = yt.create_playlist(p_req, "Sync Hub Auto"); time.sleep(3)
+            
             live_count = len(yt.get_playlist(PLAYLIST_ID, limit=None).get('tracks', []))
-            df = pd.read_csv("cleanlist.csv")
-            df.columns = ['No', 'Title', 'Artist']
-            for i in range(len(df)):
+            df = pd.read_csv("cleanlist.csv", encoding='utf-8-sig')
+            total = len(df)
+            
+            print(f"--- STARTING SYNC ({'STRICT' if is_strict else 'RELAXED'}) ---")
+            for i in range(total):
                 m_no, m_title, m_artist = int(df.iloc[i]['No']), str(df.iloc[i]['Title']), str(df.iloc[i]['Artist'])
-                if m_no <= live_count: print(f"[{m_no}] SKIPPED"); continue
+                if m_no <= live_count: print(f"[{m_no}/{total}] SKIPPED"); continue
+                
                 vid = cache.get(m_no)
                 if not vid:
                     s = yt.search(f"{m_artist} {m_title}", filter="songs")
                     if not s: continue
                     vid = s[0]['videoId']
+                
                 yt.add_playlist_items(PLAYLIST_ID, [vid])
                 with open("url.txt", "a") as f: f.write(f'{m_no},"{vid}"\n')
-                time.sleep(3.5); print(f"[{m_no}] ADDED")
+                time.sleep(3.5); print(f"[{m_no}/{total}] ADDED")
             print("\n=== SUCCESS ==="); self.unlock_buttons()
         except Exception as e: print(f"\n!!! ERROR: {str(e)} !!!"); self.unlock_buttons()
 
