@@ -12,9 +12,10 @@ import json
 import shutil
 from datetime import datetime
 from ytmusicapi import YTMusic
+from thefuzz import process # [NEW REQUIREMENT]
 
 # =====================================================================
-# PART 1: SYSTEM UTILS & LOGGING [RESTORED FROM MAIN.PY]
+# PART 1: SYSTEM UTILS & LOGGING [CORE/PERMANENT]
 # =====================================================================
 class TextRedirector:
     def __init__(self, widget):
@@ -34,12 +35,17 @@ def log_accuracy(m_no, sim_pct, target, found):
 
 def alert_user(title, message, is_choice=False, is_error=False):
     winsound.Beep(1000, 500)
-    style = 0x40031 if is_choice else 0x40010
+    if is_choice:
+        style = 0x40024  # Yes/No + Question Icon
+    elif is_error:
+        style = 0x40010  # OK + Red X Error Icon
+    else:
+        style = 0x40040  # OK + Blue Info/Success Icon
     return ctypes.windll.user32.MessageBoxW(0, message, title, style)
 
 
 # =====================================================================
-# PART 2: THE AI BRAIN LIBRARY [RESTORED FROM MAIN.PY & TARGET.PY]
+# PART 2: THE AI BRAIN LIBRARY [CORE/PERMANENT]
 # =====================================================================
 class SmartBrain:
     def __init__(self):
@@ -89,7 +95,7 @@ class SmartBrain:
 
 
 # =====================================================================
-# PART 3: GLOBAL OVERRIDES & CACHE LOADER [RESTORED FROM MAIN.PY]
+# PART 3: GLOBAL OVERRIDES & CACHE LOADER [ADJUSTABLE/TWEAKABLE]
 # =====================================================================
 MANUAL_OVERRIDES = {
     105: "dlAkd-5WmNk", 121: "M9KQbrwi7WY", 219: "INo4WtusH10", 233: "9cT-v9NxRsA", 
@@ -103,7 +109,6 @@ def load_cache_with_overrides():
     cache_map = {}
     if os.path.exists("url.txt"):
         try:
-            # Using Pandas to read to perfectly bypass commas in titles and \ufeff BOM headers
             df = pd.read_csv("url.txt", encoding='utf-8-sig')
             for idx, row in df.iterrows():
                 try:
@@ -121,7 +126,7 @@ def load_cache_with_overrides():
 
 
 # =====================================================================
-# PART 4: THE UI APPLICATION
+# PART 4: THE UI APPLICATION [CORE/PERMANENT]
 # =====================================================================
 class UltimateSyncApp(ctk.CTk):
     def __init__(self):
@@ -191,7 +196,15 @@ class UltimateSyncApp(ctk.CTk):
         self.frame_manual = ctk.CTkFrame(self.content_frame, fg_color="transparent")
         ctk.CTkLabel(self.frame_manual, text="Manual Perfection Override", font=ctk.CTkFont(size=24, weight="bold")).pack(pady=(0, 20), anchor="w")
         man_box = ctk.CTkFrame(self.frame_manual, fg_color="#2B2B2B"); man_box.pack(fill="x", pady=10, ipadx=20, ipady=20)
-        ctk.CTkLabel(man_box, text="Paste the exact YouTube Video ID below to force the bot to use it.", font=ctk.CTkFont(size=14)).pack(pady=(10, 10))
+        ctk.CTkLabel(man_box, text="Search by Song Title to find its Number.", font=ctk.CTkFont(size=14)).pack(pady=10)
+        
+        search_f = ctk.CTkFrame(man_box, fg_color="transparent")
+        search_f.pack(pady=10)
+        self.search_entry = ctk.CTkEntry(search_f, placeholder_text="Enter part of song title...", width=300)
+        self.search_entry.grid(row=0, column=0, padx=10)
+        ctk.CTkButton(search_f, text="SEARCH & VERIFY", command=self.find_and_verify, fg_color="#3D5A80", width=150).grid(row=0, column=1, padx=10)
+        
+        ctk.CTkLabel(man_box, text="Paste the exact YouTube Video ID below to force the bot to use it.", font=ctk.CTkFont(size=14)).pack(pady=(30, 10))
         ov_f = ctk.CTkFrame(man_box, fg_color="transparent"); ov_f.pack(pady=10)
         self.ov_no = ctk.CTkEntry(ov_f, placeholder_text="Song No.", width=100); self.ov_no.grid(row=0, column=0, padx=10)
         self.ov_url = ctk.CTkEntry(ov_f, placeholder_text="YouTube Video ID", width=300); self.ov_url.grid(row=0, column=1, padx=10)
@@ -209,7 +222,7 @@ class UltimateSyncApp(ctk.CTk):
         self.frame_scan = ctk.CTkFrame(self.content_frame, fg_color="transparent")
         ctk.CTkLabel(self.frame_scan, text="Target Analytics", font=ctk.CTkFont(size=24, weight="bold")).pack(pady=(0, 20), anchor="w")
         sc_box = ctk.CTkFrame(self.frame_scan, fg_color="#2B2B2B"); sc_box.pack(fill="x", pady=10, ipadx=20, ipady=30)
-        ctk.CTkLabel(sc_box, text="Compare your local CSV to the live YouTube playlist using your Sliding Window logic.", font=ctk.CTkFont(size=14)).pack(pady=10)
+        ctk.CTkLabel(sc_box, text="Compare your local CSV to the live YouTube playlist in real-time.", font=ctk.CTkFont(size=14)).pack(pady=10)
         ctk.CTkButton(sc_box, text="SCAN FOR GAPS", command=self.start_scan_thread, fg_color="#E07A5F", height=50, font=ctk.CTkFont(weight="bold")).pack(pady=20)
 
         # 5. IMPORT FRAME
@@ -229,7 +242,8 @@ class UltimateSyncApp(ctk.CTk):
         self.frame_guide = ctk.CTkFrame(self.content_frame, fg_color="transparent")
         ctk.CTkLabel(self.frame_guide, text="Operating Manual", font=ctk.CTkFont(size=24, weight="bold")).pack(pady=(0, 20), anchor="w")
         self.guide_box = ctk.CTkTextbox(self.frame_guide, wrap="word", font=ctk.CTkFont(size=14)); self.guide_box.pack(fill="both", expand=True, pady=10)
-        self.guide_box.insert("0.0", "=== 1. PREPARATION AND HEADERS ===\n1. Open music.youtube.com and make sure you are logged in.\n2. Press F12 on your keyboard and go to the Network tab.\n3. In the filter box type browse. Press F5 to refresh the page.\n4. Click the first browse entry in the list.\n5. Scroll down to Request Headers and copy the ENTIRE block.\n6. Paste it into the Auth Setup page and click Convert."); self.guide_box.configure(state="disabled")
+        self.guide_box.insert("0.0", "=== 1. PREPARATION AND HEADERS ===\n1. Open music.youtube.com and make sure you are logged in.\n2. Press F12 on your keyboard and go to the Network tab.\n3. In the filter box type browse. Press F5 to refresh the page.\n4. Click the first browse entry in the list.\n5. Scroll down to Request Headers and copy the ENTIRE block.\n6. Paste it into the Auth Setup page and click Convert.")
+        self.guide_box.configure(state="disabled")
 
         self.all_frames = [self.frame_engine, self.frame_manual, self.frame_download, self.frame_scan, self.frame_import, self.frame_auth, self.frame_guide]
 
@@ -262,23 +276,57 @@ class UltimateSyncApp(ctk.CTk):
             if p['title'].lower() == txt.lower(): return p['playlistId']
         return None
 
+    def find_and_verify(self):
+        query = self.search_entry.get().strip()
+        if not query or not os.path.exists("cleanlist.csv"): 
+            alert_user("Error", "Please import a CSV first so I have a list to search.", is_error=True)
+            return
+            
+        df = pd.read_csv("cleanlist.csv", encoding="utf-8-sig")
+        titles = df['Title'].tolist()
+        
+        # Perform Fuzzy Search
+        best_match, score = process.extractOne(query, titles)
+        res = df[df['Title'] == best_match].iloc[0]
+        
+        if score >= 90:
+            # Auto-confirm high confidence matches
+            self.ov_no.delete(0, 'end')
+            self.ov_no.insert(0, str(res['No']))
+            self.search_entry.delete(0, 'end')
+            self.search_entry.insert(0, f"Matched: {res['Title']} ({score}%)")
+            
+        elif score >= 60:
+            # Ask for user verification on medium confidence matches
+            msg = f"Found a partial match ({score}%):\n\n#{res['No']} - {res['Title']} by {res['Artist']}\n\nIs this the song you are looking for?"
+            if alert_user("Confirm Match", msg, is_choice=True) == 6:
+                self.ov_no.delete(0, 'end')
+                self.ov_no.insert(0, str(res['No']))
+                self.search_entry.delete(0, 'end')
+                self.search_entry.insert(0, f"Confirmed: {res['Title']}")
+        else:
+            alert_user("Not Found", f"No confident match found for '{query}'.\nHighest match was only {score}% for '{best_match}'.\nPlease refine your search.", is_error=True)
+
     def manual_save(self):
         n = self.ov_no.get()
         u = self.ov_url.get()
         if n and u:
-            # Writes perfectly matching your download.py CSV structure
             with open("url.txt", "a", encoding="utf-8-sig") as f:
                 f.write(f'{n},"Manual Override","User","{u}"\n')
             alert_user("Success", f"Override Saved for Song #{n}.")
+            self.ov_no.delete(0, 'end')
+            self.ov_url.delete(0, 'end')
+            self.search_entry.delete(0, 'end')
 
     def import_csv_logic(self):
         f = ctk.filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
         if not f: return
         try:
-            try: df = pd.read_csv(f, encoding='utf-8-sig')
-            except: df = pd.read_csv(f, encoding='latin1')
+            try:
+                df = pd.read_csv(f, encoding='utf-8-sig')
+            except:
+                df = pd.read_csv(f, encoding='latin1')
             
-            # Formatting explicitly to exactly match main.py expectation: df.columns = ['No', 'Title', 'Artist']
             if len(df.columns) >= 3:
                 df = df.iloc[:, :3]
             elif len(df.columns) == 2:
@@ -294,7 +342,7 @@ class UltimateSyncApp(ctk.CTk):
 
     def save_headers(self):
         raw = self.header_input.get("1.0", "end").strip()
-        req = ["cookie", "user-agent", "accept", "authorization", "x-goog-authuser"]
+        req = ["cookie", "user-agent", "accept", "authorization", "x-goog-authuser", "origin", "x-origin"]
         d = {}
         lines = [l.strip() for l in raw.split('\n') if l.strip()]
         for i in range(len(lines)):
@@ -303,11 +351,14 @@ class UltimateSyncApp(ctk.CTk):
             elif ':' in lines[i]:
                 p = lines[i].split(':', 1)
                 if p[0].strip().lower() in req: d[p[0].strip().lower()] = p[1].strip()
+        
         if "cookie" in d:
-            with open("browser.json", "w", encoding="utf-8-sig") as f: json.dump(d, f, indent=4)
+            with open("browser.json", "w", encoding="utf-8") as f: 
+                json.dump(d, f, indent=4)
             alert_user("Success", "Bot Authenticated Successfully.")
             self.header_input.delete("1.0", "end")
-        else: alert_user("Error", "Missing cookie line in headers.", is_error=True)
+        else:
+            alert_user("Error", "Missing cookie line in headers.", is_error=True)
 
     def pause_sync(self): self.sync_state = "paused"; print("\n--- PAUSED ---")
     def resume_sync(self): self.sync_state = "running"; print("\n--- RESUMING ---")
@@ -316,7 +367,7 @@ class UltimateSyncApp(ctk.CTk):
     def unlock_buttons(self): self.btn_sync.configure(state="normal", text="INITIATE SYNC")
 
     # =====================================================================
-    # PART 5: LOGIC RUNNERS (RESTORED FROM DOWNLOAD, TARGET, MAIN)
+    # PART 5: LOGIC RUNNERS
     # =====================================================================
     def start_download_thread(self): 
         self.select_frame("engine")
@@ -363,17 +414,40 @@ class UltimateSyncApp(ctk.CTk):
     def run_target_logic(self):
         brain = SmartBrain()
         print("--- TOTAL POOL SCANNER BOOTING ---")
+        
         try:
-            df_yt = pd.read_csv("ostlist.csv", encoding='utf-8-sig')
-            df_master = pd.read_csv("cleanlist.csv", header=0, encoding='latin1')
+            try:
+                df_master = pd.read_csv("cleanlist.csv", header=0, encoding='utf-8-sig')
+            except:
+                df_master = pd.read_csv("cleanlist.csv", header=0, encoding='latin1')
             df_master.columns = ['No', 'Title', 'Artist']
         except Exception as e:
-            print(f"!!! FILE ERROR: {e} - Have you run Download Data first?")
+            print(f"!!! FILE ERROR: Could not read cleanlist.csv. Have you imported a CSV list?")
+            return
+
+        try:
+            yt = YTMusic("browser.json")
+            p_input = self.playlist_input.get().strip() or "OST All Songs"
+            
+            p_id = self.resolve_playlist_id(yt, p_input)
+            if not p_id:
+                print(f"Scan Failed: Could not find playlist '{p_input}' on YouTube.")
+                return
+                
+            print(f"Fetching live data from YouTube for '{p_input}'...")
+            playlist = yt.get_playlist(p_id, limit=None)
+            
+            yt_tracks = []
+            for track in playlist['tracks']:
+                yt_tracks.append({
+                    "Title": track['title'],
+                    "Artist": ", ".join([a['name'] for a in track['artists']])
+                })
+        except Exception as e:
+            print(f"!!! YOUTUBE FETCH ERROR: {e}")
             return
 
         missing_log = []
-        duplicate_log = []
-        yt_tracks = df_yt.to_dict('records')
         yt_count = len(yt_tracks)
         scan_limit = yt_count + 5
         list_offset = 0 
@@ -416,7 +490,7 @@ class UltimateSyncApp(ctk.CTk):
                 if expected_yt_idx < yt_count:
                     actual_yt = yt_tracks[expected_yt_idx]
                     actual_yt_name = f"{actual_yt['Artist']} - {actual_yt['Title']}"
-                print(f"MISSING/WRONG #{m_no}: {row['Artist']} - {row['Title']} -- OST List has: {actual_yt_name}")
+                print(f"MISSING/WRONG #{m_no}: {row['Artist']} - {row['Title']} -- Live YT has: {actual_yt_name}")
                 missing_log.append(f"#{m_no}: {row['Title']}")
 
         if not missing_log: print("\n[+] 100 PERCENT PERFECT: System is perfectly synchronized.")
@@ -427,59 +501,59 @@ class UltimateSyncApp(ctk.CTk):
         threading.Thread(target=self.run_sync_logic, daemon=True).start()
 
     def run_sync_logic(self):
-        yt = YTMusic("browser.json")
-        brain = SmartBrain()
-        
-        if not os.path.exists("url.txt"):
-            alert_user("Missing File", "Could not find url.txt. Please run download Data first!")
-            self.unlock_buttons(); return
-
-        cache_map = load_cache_with_overrides()
-
-        ENABLE_AUTO_RECHECK = True
-        LOW_ACCURACY_BEHAVIOR = "ASK" if self.mode_switch.get() == "Strict Mode" else "LOG_ONLY"
-        RECHECK_BEHAVIOR = "LOG_ONLY"
-
-        p_input = self.playlist_input.get().strip() or "OST All Songs"
-        if p_input:
-            with open("last_playlist.txt", "w", encoding="utf-8-sig") as f: f.write(p_input)
-                
-        PLAYLIST_ID = self.resolve_playlist_id(yt, p_input)
-        if not PLAYLIST_ID:
-            print(f"--- CREATING NEW PLAYLIST: {p_input} ---")
-            PLAYLIST_ID = yt.create_playlist(p_input, "Auto-generated by Sync Bot")
-            time.sleep(3)
-            
         try:
-            current_playlist_data = yt.get_playlist(PLAYLIST_ID, limit=None)
-            live_yt_count = len(current_playlist_data.get('tracks', []))
-        except KeyError: live_yt_count = 0
+            yt = YTMusic("browser.json")
+            brain = SmartBrain()
             
-        print(f"--- SAFETY CHECK: Found {live_yt_count} songs already inside YouTube Playlist ---")
+            if not os.path.exists("url.txt"):
+                alert_user("Missing File", "Could not find url.txt. Please run download Data first!", is_error=True)
+                self.unlock_buttons(); return
 
-        try:
-            df = pd.read_csv("cleanlist.csv", header=0, encoding='latin1')
-            df.columns = ['No', 'Title', 'Artist']
-            total_songs = len(df)
-        except Exception as e:
-            alert_user("File Error", "Could not read cleanlist.csv", str(e))
-            self.unlock_buttons(); return
+            cache_map = load_cache_with_overrides()
 
-        START_AT = 1 
-        print(f"--- STARTING HYPER-SYNC ---")
-        
-        slow_search_adds = []
+            ENABLE_AUTO_RECHECK = True
+            LOW_ACCURACY_BEHAVIOR = "ASK" if self.mode_switch.get() == "Strict Mode" else "LOG_ONLY"
+            RECHECK_BEHAVIOR = "LOG_ONLY"
 
-        for i in range(START_AT - 1, total_songs):
-            while self.sync_state == "paused": time.sleep(1)
-            if self.sync_state == "stopped": break
-            
-            m_no = int(df.iloc[i]['No'])
-            m_title = str(df.iloc[i]['Title'])
-            m_artist = str(df.iloc[i]['Artist'])
-            query = f"{m_artist} {m_title}"
+            p_input = self.playlist_input.get().strip() or "OST All Songs"
+            if p_input:
+                with open("last_playlist.txt", "w", encoding="utf-8-sig") as f: f.write(p_input)
+                    
+            PLAYLIST_ID = self.resolve_playlist_id(yt, p_input)
+            if not PLAYLIST_ID:
+                print(f"--- CREATING NEW PLAYLIST: {p_input} ---")
+                PLAYLIST_ID = yt.create_playlist(p_input, "Auto-generated by Sync Bot")
+                time.sleep(3)
             
             try:
+                current_playlist_data = yt.get_playlist(PLAYLIST_ID, limit=None)
+                live_yt_count = len(current_playlist_data.get('tracks', []))
+            except KeyError: live_yt_count = 0
+                
+            print(f"--- SAFETY CHECK: Found {live_yt_count} songs already inside YouTube Playlist ---")
+
+            try:
+                df = pd.read_csv("cleanlist.csv", header=0, encoding='latin1')
+                df.columns = ['No', 'Title', 'Artist']
+                total_songs = len(df)
+            except Exception as e:
+                alert_user("File Error", "Could not read cleanlist.csv", is_error=True)
+                self.unlock_buttons(); return
+
+            START_AT = 1 
+            print(f"--- STARTING HYPER-SYNC ---")
+            
+            slow_search_adds = []
+
+            for i in range(total_songs):
+                while self.sync_state == "paused": time.sleep(1)
+                if self.sync_state == "stopped": break
+                
+                m_no = int(df.iloc[i]['No'])
+                m_title = str(df.iloc[i]['Title'])
+                m_artist = str(df.iloc[i]['Artist'])
+                query = f"{m_artist} {m_title}"
+                
                 if m_no <= live_yt_count:
                     print(f"[{m_no}/{total_songs}] {m_title} -- SKIPPED")
                     continue
@@ -487,13 +561,9 @@ class UltimateSyncApp(ctk.CTk):
                 if m_no in cache_map and pd.notna(cache_map[m_no]) and cache_map[m_no] != "None":
                     video_id = cache_map[m_no]
                     yt.add_playlist_items(PLAYLIST_ID, [video_id])
-                    
                     if m_no in MANUAL_OVERRIDES: print(f"[{m_no}/{total_songs}] {m_title} -- MANUAL OVERRIDE ADD")
                     else: print(f"[{m_no}/{total_songs}] {m_title} -- FAST CACHE ADD")
-                        
-                    time.sleep(0.5) 
-                    live_yt_count += 1 
-                    continue
+                    time.sleep(0.5); live_yt_count += 1; continue
 
                 search = yt.search(query, filter="songs")
                 if not search:
@@ -532,27 +602,29 @@ class UltimateSyncApp(ctk.CTk):
                     if artist_match_count == 0: sim_pct = 5
 
                 if title_sim < 0.4 and word_match_ratio < 1.0: sim_pct = 5 
+
                 if sim_pct < 70: log_accuracy(m_no, sim_pct, f"{m_artist}-{m_title}", f"{res_artist}-{res_title}")
 
                 if sim_pct < 10:
-                    alert_user("Hard Stop", f"Accuracy too low at number {m_no}.\nTarget: {m_title}\nFound: {res_title}\nBot stopped to prevent bad data.")
+                    alert_user("Hard Stop", f"Accuracy too low at number {m_no}.\nTarget: {m_title}\nFound: {res_title}\nBot stopped to prevent bad data.", is_error=True)
                     self.unlock_buttons(); return
 
                 if 10 <= sim_pct < 30 and LOW_ACCURACY_BEHAVIOR == "HARD_STOP":
-                    alert_user("Configured Stop", f"Accuracy is {sim_pct} percent at number {m_no}. Blocked by settings.")
+                    alert_user("Configured Stop", f"Accuracy is {sim_pct} percent at number {m_no}. Blocked by settings.", is_error=True)
                     self.unlock_buttons(); return
 
                 yt.add_playlist_items(PLAYLIST_ID, [video_id])
                 slow_search_adds.append({'m_no': m_no, 'm_title': m_title, 'm_artist': m_artist, 'yt_index': live_yt_count})
                 live_yt_count += 1 
                 
+                if not os.path.exists("url.txt"):
+                    with open("url.txt", "w", encoding="utf-8-sig") as f: f.write("No,Title,Artist,VideoID\n")
                 with open("url.txt", "a", encoding="utf-8-sig") as f:
                     f.write(f'{m_no},"{res_title}","{res_artist}","{video_id}"\n')
 
                 if 10 <= sim_pct < 30 and LOW_ACCURACY_BEHAVIOR == "ASK":
                     msg = f"VERIFY SONG \nTarget: {m_artist} - {m_title}\nFound: {res_artist} - {res_title}\n\nThe song was ADDED. Check your YT playlist now.\nOK = Continue\nCancel = Stop Bot"
-                    choice = alert_user("Low Accuracy Check", msg, is_choice=True)
-                    if choice == 2:
+                    if alert_user("Low Accuracy Check", msg, is_choice=True) == 2:
                         print("--- MANUAL STOP BY USER ---")
                         self.unlock_buttons(); return
 
@@ -562,14 +634,14 @@ class UltimateSyncApp(ctk.CTk):
                     current_playlist_data = yt.get_playlist(PLAYLIST_ID, limit=None)
                     actual_yt_count = len(current_playlist_data.get('tracks', []))
                     if actual_yt_count < live_yt_count:
-                        alert_user("Sync Error", f"Ghost Add at number {m_no}. YouTube missed the song. The playlist is desynced.")
+                        alert_user("Sync Error", f"Ghost Add at number {m_no}. YouTube missed the song. The playlist is desynced.", is_error=True)
                         self.unlock_buttons(); return
                 except KeyError: pass 
 
                 if ENABLE_AUTO_RECHECK and (m_no % 100 == 0):
                     print(f"\n--- INITIATING PERIODIC STATE RECONCILIATION AT #{m_no} ---")
                     if slow_search_adds:
-                        print("Checking live playlist integrity against clean list for recently searched songs...")
+                        print("Checking live playlist integrity...")
                         try:
                             check_data = yt.get_playlist(PLAYLIST_ID, limit=None)
                             check_tracks = check_data.get('tracks', [])
@@ -580,29 +652,17 @@ class UltimateSyncApp(ctk.CTk):
                                     yt_title_chk = yt_track['title']
                                     yt_artist_chk = ", ".join([a['name'] for a in yt_track['artists']])
                                     if not brain.is_same_song(item['m_no'], item['m_title'], item['m_artist'], yt_title_chk, yt_artist_chk):
-                                        err_msg = f"!!! RECHECK ERROR AT #{item['m_no']} !!! TARGET: {item['m_artist'].upper()} - {item['m_title'].upper()} | FOUND: {yt_artist_chk.upper()} - {yt_title_chk.upper()}"
-                                        with open("accuracy.txt", "a", encoding="utf-8") as log:
-                                            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                            log.write(f"[{now}] {err_msg}\n")
-                                        if RECHECK_BEHAVIOR == "FORCE_NOTICE":
-                                            alert_user("Recheck Mismatch", err_msg)
-                        except Exception as e: print(f"--- Recheck failed to read playlist: {e} ---")
+                                        err_msg = f"!!! RECHECK ERROR AT #{item['m_no']} !!! TARGET: {item['m_title']} | FOUND: {yt_title_chk}"
+                                        with open("accuracy.txt", "a", encoding="utf-8") as log: log.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {err_msg}\n")
+                        except Exception as e: print(f"--- Recheck failed: {e} ---")
                         slow_search_adds.clear()
-                    else: print("No non-URL songs added in this block. Skipping recheck.")
                     print("--- RECONCILIATION COMPLETE. RESUMING SYNC ---\n")
 
                 print(f"[{m_no}/{total_songs}] {m_title} -- SLOW SEARCH ADD | {sim_pct} percent")
-
-            except Exception as e:
-                error_msg = str(e)
-                if "401" in error_msg: alert_user("Authentication Error 401", "Your browser dot json headers are likely expired or invalid. You need to update them.\nDetails: " + error_msg)
-                elif "404" in error_msg: alert_user("Not Found Error 404", "The requested resource or playlist was not found on YouTube.\nDetails: " + error_msg)
-                elif "409" in error_msg: alert_user("Conflict Error 409", "YouTube servers rejected the request. This usually means you are trying to add a duplicate song.\nDetails: " + error_msg)
-                else: alert_user("Runtime Error", f"An unexpected error occurred: {error_msg}")
-                self.unlock_buttons(); return
-
-        self.unlock_buttons()
-        alert_user("Success", "100 percent Conversion Complete!")
+            self.unlock_buttons()
+            alert_user("Success", "100 percent Conversion Complete!")
+        except Exception as e: 
+            print(f"Error: {e}"); self.unlock_buttons()
 
 if __name__ == "__main__":
     app = UltimateSyncApp()
