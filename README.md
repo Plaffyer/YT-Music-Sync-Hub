@@ -2,7 +2,7 @@
 To run this application locally, you will need Python installed.
 1. Clone this repository.
 2. Install dependencies:
-   `pip install customtkinter ytmusicapi pandas`
+   `pip install customtkinter ytmusicapi pandas thefuzz`
 3. Run: `python app.py` (or use the included **Run App.bat**)
 
 ## 🛡️ Disclaimer & Use
